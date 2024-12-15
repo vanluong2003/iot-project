@@ -1,15 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
-import SockJS from "sockjs-client";
-import Stomp from "stompjs";
+import React, { useEffect, useState } from "react";
+import mqtt from "mqtt";
 
 import {
   Button,
   CircularProgress,
   CircularProgressLabel,
   Divider,
-  FormControl,
-  FormLabel,
-  SimpleGrid,
   Switch,
 } from "@chakra-ui/react";
 
@@ -19,15 +15,15 @@ import { GiElectric } from "react-icons/gi";
 import { BsFillChatDotsFill } from "react-icons/bs";
 
 import "./HomePage.css";
+
 const HomePage = () => {
-  const room = "q";
   const username = "admin";
   const [data, setData] = useState();
-  const [stompClient, setStompClient] = useState(null);
+  const [mqttClient, setMqttClient] = useState(null);
   const [potValue, setPotValue] = useState(0);
   const [leds, setLeds] = useState({ led1: false, led2: false });
 
-  const onBuzzerClick = (led) => {
+  const onBuzzerClick = () => {
     sendMessage("buzzer on", "USER");
     setTimeout(() => {
       sendMessage("buzzer off", "USER");
@@ -35,48 +31,41 @@ const HomePage = () => {
   };
 
   useEffect(() => {
-    if (stompClient !== undefined && stompClient !== null) {
-      const { led1, led2 } = leds;
-      sendMessage(led1 === true ? "led1 off" : "led1 on", "USER"); // for relay but same logic
-      sendMessage(led2 != true ? "led2 off" : "led2 on", "USER"); // for led
-    }
-  }, [leds]);
-
-  useEffect(() => {
-    const sock = new SockJS("http://192.168.0.17:8080/chat");
-    const client = Stomp.over(sock);
-    setStompClient(client);
+    const client = mqtt.connect("ws://test.mosquitto.org:8080");
+    setMqttClient(client);
   }, []);
 
   useEffect(() => {
-    if (stompClient !== undefined && stompClient !== null) {
-      stompClient.connect({}, onConnected, onError);
+    if (mqttClient !== null) {
+      mqttClient.on("connect", () => {
+        console.log("Connected to MQTT broker");
+        mqttClient.subscribe("publish", (err) => {
+          if (err) {
+            console.log("Subscription error:", err);
+          }
+        });
+      });
+
+      mqttClient.on("message", (topic, message) => {
+        const payload = JSON.parse(message.toString());
+        if (payload?.messageType === "INPUT") {
+          setPotValue(payload?.message);
+        } else {
+          setData(payload);
+        }
+      });
+
+      mqttClient.on("error", (error) => {
+        console.log("MQTT connection error:", error);
+      });
     }
-  }, [stompClient]);
 
-  const onConnected = () => {
-    if (stompClient !== undefined && stompClient !== null) {
-      sendMessage(username + " connected", "SYSTEM");
-      stompClient.subscribe("/topic/messages/" + room, onMessageReceived);
-    }
-  };
-
-  const onMessageReceived = (payload) => {
-    const message = JSON.parse(payload.body);
-    if (message?.messageType === "INPUT") {
-      setPotValue(message?.message);
-    } else {
-      setData(message);
-    }
-
-    // setTimeout(() => {
-    //
-    // }, 500);
-  };
-
-  const onError = (error) => {
-    console.log(error);
-  };
+    return () => {
+      if (mqttClient) {
+        mqttClient.end();
+      }
+    };
+  }, [mqttClient]);
 
   const sendMessage = async (msg, type) => {
     if (msg !== "") {
@@ -86,20 +75,24 @@ const HomePage = () => {
         messageType: type && type ? type : "USER",
         created: new Date(),
       };
-      if (stompClient) {
-        console.log("message sending.....");
-        stompClient.send("/app/chat/" + room, {}, JSON.stringify(data));
+      if (mqttClient) {
+        console.log("Message sending...");
+        mqttClient.publish("sensor/data", JSON.stringify(data));
       }
     }
   };
 
+  const handleLedChange = (ledName) => {
+    setLeds((prevState) => {
+      const newState = { ...prevState, [ledName]: !prevState[ledName] };
+      const message = newState[ledName] ? `${ledName} on` : `${ledName} off`;
+      sendMessage(message, "USER");
+      return newState;
+    });
+  };
+
   return (
-    <div
-      className="home-page-row"
-      style={{
-        margin: 250,
-      }}
-    >
+    <div className="home-page-row" style={{ margin: 250 }}>
       <div>
         {data?.username === "admin" ? (
           ""
@@ -119,8 +112,8 @@ const HomePage = () => {
           </h1>
           <Switch
             id="isChecked"
-            value={leds.led1}
-            onChange={() => setLeds({ ...leds, led1: !leds.led1 })}
+            isChecked={leds.led1}
+            onChange={() => handleLedChange("led1")}
             size="lg"
           />
         </div>
@@ -130,8 +123,8 @@ const HomePage = () => {
             Led
           </h1>
           <Switch
-            value={leds.led2}
-            onChange={() => setLeds({ ...leds, led2: !leds.led2 })}
+            isChecked={leds.led2}
+            onChange={() => handleLedChange("led2")}
             id="isChecked2"
             size="lg"
           />

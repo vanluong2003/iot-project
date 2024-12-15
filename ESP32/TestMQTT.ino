@@ -3,8 +3,8 @@
 #include <SoftwareSerial.h>
 #include <PubSubClient.h>
 
-const char* ssid = "Hust_TC";
-const char* password = "";
+const char* ssid = "25 Hoang Van Thai";
+const char* password = "vananh1212";
 
 const char* mqtt_server = "test.mosquitto.org";
 
@@ -31,7 +31,7 @@ void setup() {
 
 void setup_wifi() {
   delay(10);
-.  Serial.println();
+  Serial.println();
   Serial.print("Connecting to ");
   Serial.println(ssid);
 
@@ -67,7 +67,18 @@ void callback(char* topic, byte* message, unsigned int length) {
   // Changes the output state according to the message
   if (String(topic) == "sensor/data") {
     Serial.print("Changing output to ");
-    s1.println(messageTemp); // gửi data sang arduino
+
+    // Lọc giá trị trong message
+    int startIndex = messageTemp.indexOf("\"message\":\"") + 11; // Tìm vị trí bắt đầu giá trị message
+    int endIndex = messageTemp.indexOf("\"", startIndex); // Tìm vị trí kết thúc giá trị message
+
+    if (startIndex > 10 && endIndex > startIndex) { // Kiểm tra chỉ số hợp lệ
+      String extractedMessage = messageTemp.substring(startIndex, endIndex);
+      Serial.println(extractedMessage);
+      s1.println(extractedMessage); // Gửi giá trị message sang Arduino
+    } else {
+      Serial.println("Invalid message format");
+    }
   }
 }
 
@@ -89,19 +100,26 @@ void reconnect() {
     }
   }
 }
+
 String str;
 void serialGetData() {
   if (s1.available() > 0) {
-    str = s1.readStringUntil('\n');
-    if(str.length()>0){
+    String str = s1.readStringUntil('\n');
+    if (str.length() > 0) {
       str = str.substring(0, str.length() - 1);
       str.replace("\\", "");
       Serial.println(str);
-      client.publish("sensor/data", str.c_str());
+      // Tạo chuỗi JSON theo yêu cầu
+      String jsonMessage = "{\"message\": " + String(str) + ", \"messageType\": \"INPUT\"}";
+      // In chuỗi JSON ra serial monitor để kiểm tra
+      Serial.println(jsonMessage);
+      // Publish chuỗi JSON
+      client.publish("publish", jsonMessage.c_str());
     }
   }
   delay(50);
 }
+
 
 void loop() {
   if (!client.connected()) {

@@ -4,12 +4,15 @@
   "private": true,
   "dependencies": {
     "@chakra-ui/react": "^1.8.5",
+    "@craco/craco": "^7.1.0",
     "@emotion/react": "^11.8.1",
     "@emotion/styled": "^11.8.1",
     "@testing-library/jest-dom": "^5.16.2",
     "@testing-library/react": "^12.1.3",
     "@testing-library/user-event": "^13.5.0",
     "framer-motion": "^6.2.8",
+    "mqtt": "^5.10.3",
+    "net": "^1.0.2",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-icons": "^4.3.1",
@@ -17,7 +20,6 @@
     "react-scripts": "5.0.0",
     "sockjs-client": "^1.5.2",
     "stompjs": "^2.3.3",
-    "net": "^1.0.2",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
@@ -43,5 +45,11 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "buffer": "^6.0.3",
+    "process": "^0.11.10",
+    "stream-browserify": "^3.0.0",
+    "util": "^0.12.5"
   }
 }
