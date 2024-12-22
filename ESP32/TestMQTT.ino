@@ -1,12 +1,13 @@
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <WiFi.h>
 #include <SoftwareSerial.h>
 #include <PubSubClient.h>
 
-const char* ssid = "25 Hoang Van Thai";
-const char* password = "vananh1212";
+const char* ssid = "TP-Link_4F4D";
+const char* password = "44875824";
 
-const char* mqtt_server = "test.mosquitto.org";
+const char* mqtt_server = "192.168.0.109";
 
 SoftwareSerial s1(12, 13); // Rx, Tx
 
@@ -61,24 +62,16 @@ void callback(char* topic, byte* message, unsigned int length) {
   }
   Serial.println();
 
-  // Feel free to add more if statements to control more GPIOs with MQTT
-
-  // If a message is received on the topic esp32/output, you check if the message is either "on" or "off". 
-  // Changes the output state according to the message
   if (String(topic) == "sensor/data") {
     Serial.print("Changing output to ");
+    StaticJsonDocument<256> doc;
+    deserializeJson(doc, messageTemp);
+    const char* name = doc["name"];
+    const char* status = doc["status"];
+    String extractedMessage = String(name) + " " + String(status);
+    Serial.println(extractedMessage);
+    s1.println(extractedMessage);
 
-    // Lọc giá trị trong message
-    int startIndex = messageTemp.indexOf("\"message\":\"") + 11; // Tìm vị trí bắt đầu giá trị message
-    int endIndex = messageTemp.indexOf("\"", startIndex); // Tìm vị trí kết thúc giá trị message
-
-    if (startIndex > 10 && endIndex > startIndex) { // Kiểm tra chỉ số hợp lệ
-      String extractedMessage = messageTemp.substring(startIndex, endIndex);
-      Serial.println(extractedMessage);
-      s1.println(extractedMessage); // Gửi giá trị message sang Arduino
-    } else {
-      Serial.println("Invalid message format");
-    }
   }
 }
 
@@ -104,17 +97,34 @@ void reconnect() {
 String str;
 void serialGetData() {
   if (s1.available() > 0) {
-    String str = s1.readStringUntil('\n');
-    if (str.length() > 0) {
-      str = str.substring(0, str.length() - 1);
-      str.replace("\\", "");
-      Serial.println(str);
-      // Tạo chuỗi JSON theo yêu cầu
-      String jsonMessage = "{\"message\": " + String(str) + ", \"messageType\": \"INPUT\"}";
-      // In chuỗi JSON ra serial monitor để kiểm tra
-      Serial.println(jsonMessage);
-      // Publish chuỗi JSON
-      client.publish("publish", jsonMessage.c_str());
+    String input = s1.readStringUntil('\n');
+    input.trim();
+    //Serial.println(input);
+    if (input.length() > 0) {
+      StaticJsonDocument<256> doc;
+      if (input.startsWith("Tem:") && input.indexOf("Hum:") != -1) {
+        // Dữ liệu dạng "Tem: 30.0 - Hum: 80.0"
+        float temperature = input.substring(input.indexOf("Tem:") + 5, input.indexOf(" - Hum:")).toFloat();
+        float humidity = input.substring(input.indexOf("Hum:") + 5).toFloat();
+
+        doc["name"] = "dht11";
+        doc["temperature"] = String(temperature, 1); // Chuyển thành chuỗi định dạng 1 chữ số thập phân
+        doc["humidity"] = String(humidity, 1);
+      } else if (input.startsWith("Pot:")) {
+        // Dữ liệu dạng "Pot: 50"
+        int potValue = input.substring(input.indexOf("Pot:") + 5).toInt();
+        doc["name"] = "potentiometer";
+        doc["value"] = String(potValue);
+      } else {
+        Serial.println("Dữ liệu không hợp lệ.");
+      }
+      String currentTime = "2024-12-18T01:18:05.587797Z"; // Bạn có thể thay thế bằng thời gian thực nếu có module RTC
+      doc["time"] = currentTime;
+      String jsonString;
+      serializeJson(doc, jsonString); // Chuyển JSON thành chuỗi
+
+      // Gửi dữ liệu JSON qua MQTT
+      client.publish("publish", jsonString.c_str());
     }
   }
   delay(50);
